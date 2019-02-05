@@ -62,7 +62,7 @@ const defaultAudioCodec = "aac"
 const usage = `chromecastise 1.0.0
 
 Usage:
-	chromecastise (--mp4 | --mkv) <file>...
+	chromecastise [--mp4 | --mkv] <file>...
 
 Arguments:
 	<file>	The file you wish to transcode for chromecast compatibility.
