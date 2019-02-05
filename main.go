@@ -59,23 +59,32 @@ const defaultVideoCodec = "libx264"
 // Default audio codec to convert to
 const defaultAudioCodec = "aac"
 
-const usage = `chromecastise
+const usage = `chromecastise 1.0.0
 
 Usage:
-	chromecastise [--format=mp4|mkv] <file>...
+	chromecastise [--mp4 | --mkv] <file>...
 
 Arguments:
-	<file>	The file you wish to transcode for chromecast compatibility
+	<file>	The file you wish to transcode for chromecast compatibility.
+
+Options:
+	-h --help     Show this screen.
+	--version     Show version.
+	--mp4         Convert to mp4 container format [default: true]
+	--mkv         Convert to mkv container format [default: false]
 `
 
 func main() {
-	arguments, err := docopt.Parse(usage, nil, true, "transaction_plotter 1.0", false)
+	arguments, err := docopt.ParseArgs(usage, nil, "chromecastise 1.0.0")
 	if err != nil {
 		log.Fatal(err)
 		os.Exit(1)
 	}
 
-	format := arguments["--format"].(string)
+	format := "mp4"
+	if arguments["--mkv"].(bool) {
+		format = "mkv"
+	}
 
 	for _, f := range arguments["<file>"].([]string) {
 		if err := processFile(filepath.Clean(f), format); err != nil {
@@ -90,6 +99,7 @@ func processFile(p string, format string) error {
 	if !isSupported(extension, fileExtensions) {
 		return fmt.Errorf("[%s] unsupported video format found", p)
 	}
+	extension = strings.TrimPrefix(extension, ".")
 
 	// Set container format
 	outputContainerFormat := format
@@ -123,7 +133,7 @@ func processFile(p string, format string) error {
 		outAudioCodec = "copy"
 	}
 
-	if outVideoCodec == "copy" && outAudioCodec == "copy" {
+	if outVideoCodec == "copy" && outAudioCodec == "copy" && extension == format {
 		log.Printf("[%s] no conversion required", p)
 		return nil
 	}
@@ -131,17 +141,25 @@ func processFile(p string, format string) error {
 	// Convert the file
 	basename := strings.TrimSuffix(filepath.Base(p), extension)
 
-	out, err = exec.Command("ffmpeg", "-threads", "4", "-i", p, "-map",
+	args := []string{"ffmpeg", "-threads", "4", "-i", p, "-map",
 		"0:0", "-c:v", outVideoCodec, "-preset", "slow", "-level", "4.0",
 		"-crf", "20", "-bf", "16", "-b_strategy", "2", "-subq", "10",
 		"-map", "0:1", "-c:a:0", outAudioCodec, "-b:a:0", "128k",
-		"-strict", "-2", "-y",
-		//"-c:s copy",
-		filepath.Join(filepath.Dir(p), basename+"_new."+outputContainerFormat)).CombinedOutput()
+		"-strict", "-2", "-y"}
+
+	args = append(args, filepath.Join(filepath.Dir(p), basename+"_new."+outputContainerFormat))
+
+	if outputContainerFormat == "mkv" {
+		args = append(args, "-c:s copy")
+	}
+
+	output, err := exec.Command("ffmpeg", args...).Output()
 
 	if err != nil {
 		return fmt.Errorf("[%s] ffmpeg failed to transcode the file: %s", p, err)
 	}
+
+	fmt.Println(string(output))
 
 	return nil
 }
