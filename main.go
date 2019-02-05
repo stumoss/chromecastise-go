@@ -70,8 +70,8 @@ Arguments:
 Options:
 	-h --help     Show this screen.
 	--version     Show version.
-	--mp4		  Convert to mp4 container format [default: true]
-	--mkv 		  Convert to mkv container format [default: false]
+	--mp4         Convert to mp4 container format [default: true]
+	--mkv         Convert to mkv container format [default: false]
 `
 
 func main() {
@@ -99,6 +99,7 @@ func processFile(p string, format string) error {
 	if !isSupported(extension, fileExtensions) {
 		return fmt.Errorf("[%s] unsupported video format found", p)
 	}
+	extension = strings.TrimPrefix(extension, ".")
 
 	// Set container format
 	outputContainerFormat := format
