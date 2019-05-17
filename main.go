@@ -26,16 +26,6 @@ var fileExtensions = map[string]bool{
 	".flv":  true,
 }
 
-// Map of formats and if they are supported or not
-var formats = map[string]bool{
-	"MPEG-4":      true,
-	"Matroska":    true,
-	"BDAV":        false,
-	"AVI":         false,
-	"Flash Video": false,
-	"Unknown":     false,
-}
-
 var videoCodecs = map[string]bool{
 	"AVC":           true,
 	"MPEG-4 Visual": false,
@@ -45,9 +35,9 @@ var videoCodecs = map[string]bool{
 
 var audioCodecs = map[string]bool{
 	"AAC":        true,
-	"MPEG Audio": false, //true, Changed to false for iOS
-	"Vorbis":     false, //true, Changed to false for iOS
-	"Ogg":        false, //true, Changed to false for iOS
+	"MPEG Audio": false, // true, Changed to false for iOS
+	"Vorbis":     false, // true, Changed to false for iOS
+	"Ogg":        false, // true, Changed to false for iOS
 	"AC-3":       false,
 	"DTS":        false,
 	"PCM":        false,
@@ -58,21 +48,6 @@ const defaultVideoCodec = "libx264"
 
 // Default audio codec to convert to
 const defaultAudioCodec = "aac"
-
-const usage = `chromecastise 1.0.0
-
-Usage:
-	chromecastise [--mp4 | --mkv] <file>...
-
-Arguments:
-	<file>	The file you wish to transcode for chromecast compatibility.
-
-Options:
-	-h --help     Show this screen.
-	--version     Show version.
-	--mp4         Convert to mp4 container format [default: true]
-	--mkv         Convert to mkv container format [default: false]
-`
 
 func main() {
 	arguments, err := docopt.ParseArgs(usage, nil, "chromecastise 1.0.0")
@@ -103,14 +78,14 @@ func processFile(p string, format string) error {
 
 	// Set container format
 	outputContainerFormat := format
-	out, err := exec.Command("mediainfo", "--Inform=General;%Format%", p).CombinedOutput()
+	_, err := exec.Command("mediainfo", "--Inform=General;%Format%", p).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("[%s] mediainfo failed to get the container format: %s", p, err)
 	}
 
 	// Set video encoding
 	outVideoCodec := defaultVideoCodec
-	out, err = exec.Command("mediainfo", "--Inform=Video;%Format%", p).CombinedOutput()
+	out, err := exec.Command("mediainfo", "--Inform=Video;%Format%", p).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("[%s] mediainfo failed to get the encoding format: %s", p, err)
 	}
@@ -122,7 +97,7 @@ func processFile(p string, format string) error {
 
 	// Set audio encoding
 	outAudioCodec := defaultAudioCodec
-	out, err = exec.Command("mediainfo", "--Inform=Audio;%Format%", p).CombinedOutput()
+	_, err = exec.Command("mediainfo", "--Inform=Audio;%Format%", p).CombinedOutput()
 	if err != nil {
 		log.Fatal(err)
 		return fmt.Errorf("[%s] mediainfo failed to get the audio encoding format: %s", p, err)
@@ -139,24 +114,27 @@ func processFile(p string, format string) error {
 	}
 
 	// Convert the file
-	basename := strings.TrimSuffix(filepath.Base(p), extension)
+	basename := strings.TrimSuffix(filepath.Base(p), "."+extension)
 
-	args := []string{"ffmpeg", "-threads", "4", "-i", p, "-map",
+	args := []string{
+		"-threads", "4", "-i", strings.Replace(p, " ", "\\ ", -1), "-map",
 		"0:0", "-c:v", outVideoCodec, "-preset", "slow", "-level", "4.0",
 		"-crf", "20", "-bf", "16", "-b_strategy", "2", "-subq", "10",
 		"-map", "0:1", "-c:a:0", outAudioCodec, "-b:a:0", "128k",
-		"-strict", "-2", "-y"}
+		"-strict", "-2", "-y",
+	}
 
-	args = append(args, filepath.Join(filepath.Dir(p), basename+"_new."+outputContainerFormat))
-
+	// Copy subtitles if the source has any
+	// NOTE: mp4 doesn't support subtitles within the container
 	if outputContainerFormat == "mkv" {
 		args = append(args, "-c:s copy")
 	}
 
-	output, err := exec.Command("ffmpeg", args...).Output()
+	args = append(args, strings.Replace(filepath.Join(filepath.Dir(p), basename+"_new."+outputContainerFormat), " ", "\\ ", -1))
 
+	output, err := exec.Command("ffmpeg", args...).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("[%s] ffmpeg failed to transcode the file: %s", p, err)
+		return fmt.Errorf("ffmpeg failed to transcode the file with command: \n\t%s\n\terror: %s\n\n%s", args, err, output)
 	}
 
 	fmt.Println(string(output))
