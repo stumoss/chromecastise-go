@@ -3,14 +3,14 @@ package main
 const usage = `chromecastise 1.0.0
 
 Usage:
-	chromecastise [--mp4 | --mkv] <file>...
+	chromecastise [--mp4 | --mkv] [--suffix=<suffix>] <file>...
 
 Arguments:
-	<file>	The file you wish to transcode.
+	<file>    The file you wish to transcode.
 
 Options:
-	-h --help     Show this screen.
-	--version     Show version.
-	--mp4         Convert to mp4 container format
-	--mkv         Convert to mkv container format
-`
+	-h --help            Show this screen.
+	--version            Show version.
+	--mp4                Convert to mp4 container format [default: true].
+	--mkv                Convert to mkv container format.
+	--suffix=<suffix>    The file suffix to append to the filename (before the file extension) [default: _new]`

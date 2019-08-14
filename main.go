@@ -61,14 +61,21 @@ func main() {
 		format = "mkv"
 	}
 
+	fileSuffix := "_new"
+	s, err := arguments.String("--suffix")
+	if err == nil {
+		fileSuffix = s
+	}
+
 	for _, f := range arguments["<file>"].([]string) {
-		if err := processFile(filepath.Clean(f), format); err != nil {
+		if err := processFile(filepath.Clean(f), format, fileSuffix); err != nil {
 			log.Println(err)
 		}
 	}
+
 }
 
-func processFile(p string, format string) error {
+func processFile(p string, format string, fileSuffix string) error {
 	// Check for supported extension
 	extension := filepath.Ext(p)
 	if !isSupported(extension, fileExtensions) {
@@ -117,7 +124,7 @@ func processFile(p string, format string) error {
 	basename := strings.TrimSuffix(filepath.Base(p), "."+extension)
 
 	args := []string{
-		"-threads", "4", "-i", strings.Replace(p, " ", "\\ ", -1), "-map",
+		"-threads", "4", "-i", p, "-map",
 		"0:0", "-c:v", outVideoCodec, "-preset", "slow", "-level", "4.0",
 		"-crf", "20", "-bf", "16", "-b_strategy", "2", "-subq", "10",
 		"-map", "0:1", "-c:a:0", outAudioCodec, "-b:a:0", "128k",
@@ -130,14 +137,18 @@ func processFile(p string, format string) error {
 		args = append(args, "-c:s copy")
 	}
 
-	args = append(args, strings.Replace(filepath.Join(filepath.Dir(p), basename+"_new."+outputContainerFormat), " ", "\\ ", -1))
+	args = append(args, filepath.Join(filepath.Dir(p), basename+fileSuffix+"."+outputContainerFormat))
 
-	output, err := exec.Command("ffmpeg", args...).CombinedOutput()
+	cmd := exec.Command("ffmpeg", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	err = cmd.Run()
 	if err != nil {
-		return fmt.Errorf("ffmpeg failed to transcode the file with command: \n\t%s\n\terror: %s\n\n%s", args, err, output)
+		return fmt.Errorf("ffmpeg failed to transcode the file with command: \n\t%s %s\n\terror: %s", "ffmpeg", args, err)
 	}
 
-	fmt.Println(string(output))
+	fmt.Println("test")
 
 	return nil
 }
