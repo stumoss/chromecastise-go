@@ -21,9 +21,10 @@ var usageTestTable = []struct {
 		validArgs:   true,
 		wantErr:     false,
 		opts: docopt.Opts{
-			"--mp4":  false,
-			"--mkv":  true,
-			"<file>": []string{"testfile1.ogg"},
+			"--mp4":    false,
+			"--mkv":    true,
+			"<file>":   []string{"testfile1.ogg"},
+			"--suffix": "_new",
 		},
 	},
 
@@ -33,9 +34,10 @@ var usageTestTable = []struct {
 		true,
 		false,
 		docopt.Opts{
-			"--mp4":  false,
-			"--mkv":  false,
-			"<file>": []string{"testfile1.ogg", "testfile2.ogg"},
+			"--mp4":    false,
+			"--mkv":    false,
+			"<file>":   []string{"testfile1.ogg", "testfile2.ogg"},
+			"--suffix": "_new",
 		},
 	},
 
@@ -45,9 +47,23 @@ var usageTestTable = []struct {
 		true,
 		false,
 		docopt.Opts{
-			"--mp4":  true,
-			"--mkv":  false,
-			"<file>": []string{"testfile1.ogg", "testfile2.ogg"},
+			"--mp4":    true,
+			"--mkv":    false,
+			"<file>":   []string{"testfile1.ogg", "testfile2.ogg"},
+			"--suffix": "_new",
+		},
+	},
+
+	{
+		"Changing the suffix works",
+		[]string{"--mp4", "--suffix=.foo.bar", "testfile1.ogg"},
+		true,
+		false,
+		docopt.Opts{
+			"--mp4":    true,
+			"--mkv":    false,
+			"<file>":   []string{"testfile1.ogg"},
+			"--suffix": ".foo.bar",
 		},
 	},
 
@@ -58,9 +74,10 @@ var usageTestTable = []struct {
 		false,
 		true,
 		docopt.Opts{
-			"--mp4":  true,
-			"--mkv":  true,
-			"<file>": []string{"testfile.ogg"},
+			"--mp4":    true,
+			"--mkv":    true,
+			"<file>":   []string{"testfile.ogg"},
+			"--suffix": "_new",
 		},
 	},
 }
