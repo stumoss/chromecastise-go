@@ -5,8 +5,15 @@ able to be played by chromecast devices.
 
 ```bash
 Usage:
-	chromecastise [--format=mp4|mkv] <file>...
+        chromecastise [--mp4 | --mkv] [--suffix=<suffix>] <file>...
 
 Arguments:
-	<file>	The file you wish to transcode for chromecast compatibility
+        <file>    The file you wish to transcode.
+
+Options:
+        -h --help            Show this screen.
+        --version            Show version.
+        --mp4                Convert to mp4 container format [default: true].
+        --mkv                Convert to mkv container format.
+        --suffix=<suffix>    The file suffix to append to the filename (before the file extension) [default: _new]
 ```
