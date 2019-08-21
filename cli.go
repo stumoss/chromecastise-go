@@ -1,6 +1,6 @@
 package main
 
-const usage = `chromecastise 1.0.0
+var usage = `chromecastise ` + appVersion + `
 
 Usage:
 	chromecastise [--mp4 | --mkv] [--suffix=<suffix>] <file>...

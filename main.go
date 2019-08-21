@@ -49,8 +49,11 @@ const defaultVideoCodec = "libx264"
 // Default audio codec to convert to
 const defaultAudioCodec = "aac"
 
+// The version
+var appVersion = "undefined"
+
 func main() {
-	arguments, err := docopt.ParseArgs(usage, nil, "chromecastise 1.0.0")
+	arguments, err := docopt.ParseArgs(usage, nil, "chromecastise "+appVersion)
 	if err != nil {
 		log.Fatal(err)
 		os.Exit(1)
@@ -72,7 +75,6 @@ func main() {
 			log.Println(err)
 		}
 	}
-
 }
 
 func processFile(p string, format string, fileSuffix string) error {
@@ -147,8 +149,6 @@ func processFile(p string, format string, fileSuffix string) error {
 	if err != nil {
 		return fmt.Errorf("ffmpeg failed to transcode the file with command: \n\t%s %s\n\terror: %s", "ffmpeg", args, err)
 	}
-
-	fmt.Println("test")
 
 	return nil
 }
