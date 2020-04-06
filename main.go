@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
 
@@ -70,14 +72,29 @@ func main() {
 		fileSuffix = s
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	defer func() {
+		signal.Stop(c)
+		cancel()
+	}()
+	go func() {
+		select {
+		case <-c:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+
 	for _, f := range arguments["<file>"].([]string) {
-		if err := processFile(filepath.Clean(f), format, fileSuffix); err != nil {
+		if err := processFile(ctx, filepath.Clean(f), format, fileSuffix); err != nil {
 			log.Println(err)
 		}
 	}
 }
 
-func processFile(p string, format string, fileSuffix string) error {
+func processFile(ctx context.Context, p string, format string, fileSuffix string) error {
 	// Check for supported extension
 	extension := filepath.Ext(p)
 	if !isSupported(extension, fileExtensions) {
@@ -106,7 +123,7 @@ func processFile(p string, format string, fileSuffix string) error {
 
 	// Set audio encoding
 	outAudioCodec := defaultAudioCodec
-	_, err = exec.Command("mediainfo", "--Inform=Audio;%Format%", p).CombinedOutput()
+	_, err = exec.CommandContext(ctx, "mediainfo", "--Inform=Audio;%Format%", p).CombinedOutput()
 	if err != nil {
 		log.Fatal(err)
 		return fmt.Errorf("[%s] mediainfo failed to get the audio encoding format: %s", p, err)
@@ -139,9 +156,9 @@ func processFile(p string, format string, fileSuffix string) error {
 		args = append(args, "-c:s copy")
 	}
 
-	args = append(args, filepath.Join(filepath.Dir(p), basename+fileSuffix+"."+outputContainerFormat))
+	args = append(args, filepath.Join(filepath.Dir(p), basename+"."+outputContainerFormat))
 
-	cmd := exec.Command("ffmpeg", args...)
+	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
