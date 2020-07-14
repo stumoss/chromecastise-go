@@ -8,10 +8,10 @@ import (
 )
 
 var usageTestTable = []struct {
-	description string   // A description of the test
-	argv        []string // Given command line args
-	validArgs   bool     // Are the given arguments valid
-	wantErr     bool     // Do we expect an error
+	description string                     // A description of the test
+	argv        []string                   // Given command line args
+	validArgs   bool                       // Are the given arguments valid
+	wantErr     require.ErrorAssertionFunc // Do we expect an error
 	opts        docopt.Opts
 }{
 	// Good cases
@@ -19,7 +19,7 @@ var usageTestTable = []struct {
 		description: "Providing --mkv overrides the default of mp4",
 		argv:        []string{"--mkv", "testfile1.ogg"},
 		validArgs:   true,
-		wantErr:     false,
+		wantErr:     require.NoError,
 		opts: docopt.Opts{
 			"--mp4":    false,
 			"--mkv":    true,
@@ -32,7 +32,7 @@ var usageTestTable = []struct {
 		"Providing no container format is valid",
 		[]string{"testfile1.ogg", "testfile2.ogg"},
 		true,
-		false,
+		require.NoError,
 		docopt.Opts{
 			"--mp4":    false,
 			"--mkv":    false,
@@ -45,7 +45,7 @@ var usageTestTable = []struct {
 		"Providing multiple files is valid",
 		[]string{"--mp4", "testfile1.ogg", "testfile2.ogg"},
 		true,
-		false,
+		require.NoError,
 		docopt.Opts{
 			"--mp4":    true,
 			"--mkv":    false,
@@ -58,7 +58,7 @@ var usageTestTable = []struct {
 		"Changing the suffix works",
 		[]string{"--mp4", "--suffix=.foo.bar", "testfile1.ogg"},
 		true,
-		false,
+		require.NoError,
 		docopt.Opts{
 			"--mp4":    true,
 			"--mkv":    false,
@@ -72,7 +72,7 @@ var usageTestTable = []struct {
 		"Providing both --mp4 and --mkv is invalid",
 		[]string{"--mp4", "--mkv", "testfile.ogg"},
 		false,
-		true,
+		require.Error,
 		docopt.Opts{
 			"--mp4":    true,
 			"--mkv":    true,
@@ -94,13 +94,9 @@ func TestUsage(t *testing.T) {
 				},
 			}
 			opts, err := parser.ParseArgs(usage, tt.argv, "")
-			if tt.wantErr {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, tt.validArgs, validArgs)
-				require.Equal(t, tt.opts, opts)
-			}
+			tt.wantErr(t, err)
+			require.Equal(t, tt.validArgs, validArgs)
+			require.Equal(t, tt.opts, opts)
 		})
 	}
 }
