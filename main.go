@@ -1,14 +1,17 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"log"
+	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
 
-	docopt "github.com/docopt/docopt-go"
+	"github.com/alecthomas/kong"
+	log "github.com/sirupsen/logrus"
 )
 
 // Map of file extensions and if they are supported or not
@@ -45,55 +48,73 @@ var videoCodecs = map[string]bool{
 
 var audioCodecs = map[string]bool{
 	"AAC":        true,
-	"MPEG Audio": false, //true, Changed to false for iOS
-	"Vorbis":     false, //true, Changed to false for iOS
-	"Ogg":        false, //true, Changed to false for iOS
+	"MPEG Audio": false, // true, Changed to false for iOS
+	"Vorbis":     false, // true, Changed to false for iOS
+	"Ogg":        false, // true, Changed to false for iOS
 	"AC-3":       false,
 	"DTS":        false,
 	"PCM":        false,
 }
 
-// Default video codec to convert to
-const defaultVideoCodec = "libx264"
+const (
+	defaultVideoCodec = "libx264" // Default video codec to convert to
+	defaultAudioCodec = "aac"     // Default audio codec to convert to
+)
 
-// Default audio codec to convert to
-const defaultAudioCodec = "aac"
+type CLI struct {
+	Transcoder Transcoder `embed:""`
+	Log        struct {
+		Level string `enum:"trace,debug,info,warn,error,fatal,panic" default:"info"`
+		Type  string `enum:"json,console,none" default:"console"`
+	} `embed:"" prefix:"logging."`
+}
 
-const usage = `chromecastise 1.0.0
-
-Usage:
-	chromecastise [--mp4 | --mkv] <file>...
-
-Arguments:
-	<file>	The file you wish to transcode for chromecast compatibility.
-
-Options:
-	-h --help     Show this screen.
-	--version     Show version.
-	--mp4         Convert to mp4 container format [default: true]
-	--mkv         Convert to mkv container format [default: false]
-`
-
-func main() {
-	arguments, err := docopt.ParseArgs(usage, nil, "chromecastise 1.0.0")
+func (c *CLI) AfterApply() error {
+	lvl, err := log.ParseLevel(c.Log.Level)
 	if err != nil {
-		log.Fatal(err)
-		os.Exit(1)
+		return err
 	}
 
-	format := "mp4"
-	if arguments["--mkv"].(bool) {
-		format = "mkv"
-	}
+	log.SetLevel(lvl)
 
-	for _, f := range arguments["<file>"].([]string) {
-		if err := processFile(filepath.Clean(f), format); err != nil {
+	switch c.Log.Type {
+	case "console":
+		log.SetFormatter(&log.TextFormatter{})
+	case "json":
+		log.SetFormatter(&log.JSONFormatter{})
+	case "none":
+		log.SetFormatter(&log.TextFormatter{})
+		log.SetOutput(io.Discard)
+	}
+	return nil
+}
+
+type Transcoder struct {
+	Format string   `enum:"mp4,mkv" default:"mkv"`
+	Files  []string `arg:"" name:"files" help:"files to convert." type:"path"`
+}
+
+func (c *CLI) Run() error {
+	log.WithField("files", c.Transcoder.Files).Debug("file transcode starting")
+
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
+	defer cancel()
+
+	for _, f := range c.Transcoder.Files {
+		if err := processFile(ctx, filepath.Clean(f), c.Transcoder.Format); err != nil {
 			log.Println(err)
 		}
 	}
+	return nil
 }
 
-func processFile(p string, format string) error {
+func main() {
+	ctx := kong.Parse(&CLI{})
+	err := ctx.Run()
+	ctx.FatalIfErrorf(err)
+}
+
+func processFile(ctx context.Context, p string, format string) error {
 	// Check for supported extension
 	extension := filepath.Ext(p)
 	if !isSupported(extension, fileExtensions) {
@@ -103,14 +124,14 @@ func processFile(p string, format string) error {
 
 	// Set container format
 	outputContainerFormat := format
-	out, err := exec.Command("mediainfo", "--Inform=General;%Format%", p).CombinedOutput()
+	_, err := exec.CommandContext(ctx, "mediainfo", "--Inform=General;%Format%", p).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("[%s] mediainfo failed to get the container format: %s", p, err)
 	}
 
 	// Set video encoding
 	outVideoCodec := defaultVideoCodec
-	out, err = exec.Command("mediainfo", "--Inform=Video;%Format%", p).CombinedOutput()
+	out, err := exec.CommandContext(ctx, "mediainfo", "--Inform=Video;%Format%", p).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("[%s] mediainfo failed to get the encoding format: %s", p, err)
 	}
@@ -122,7 +143,7 @@ func processFile(p string, format string) error {
 
 	// Set audio encoding
 	outAudioCodec := defaultAudioCodec
-	out, err = exec.Command("mediainfo", "--Inform=Audio;%Format%", p).CombinedOutput()
+	out, err = exec.CommandContext(ctx, "mediainfo", "--Inform=Audio;%Format%", p).CombinedOutput()
 	if err != nil {
 		log.Fatal(err)
 		return fmt.Errorf("[%s] mediainfo failed to get the audio encoding format: %s", p, err)
@@ -141,11 +162,13 @@ func processFile(p string, format string) error {
 	// Convert the file
 	basename := strings.TrimSuffix(filepath.Base(p), extension)
 
-	args := []string{"ffmpeg", "-threads", "4", "-i", p, "-map",
+	args := []string{
+		"ffmpeg", "-threads", "4", "-i", p, "-map",
 		"0:0", "-c:v", outVideoCodec, "-preset", "slow", "-level", "4.0",
 		"-crf", "20", "-bf", "16", "-b_strategy", "2", "-subq", "10",
 		"-map", "0:1", "-c:a:0", outAudioCodec, "-b:a:0", "128k",
-		"-strict", "-2", "-y"}
+		"-strict", "-2", "-y",
+	}
 
 	args = append(args, filepath.Join(filepath.Dir(p), basename+"_new."+outputContainerFormat))
 
@@ -153,8 +176,7 @@ func processFile(p string, format string) error {
 		args = append(args, "-c:s copy")
 	}
 
-	output, err := exec.Command("ffmpeg", args...).Output()
-
+	output, err := exec.CommandContext(ctx, "ffmpeg", args...).Output()
 	if err != nil {
 		return fmt.Errorf("[%s] ffmpeg failed to transcode the file: %s", p, err)
 	}
